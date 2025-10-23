@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>After School Classes</title>
+  <link rel="stylesheet" href="/CSS/Coursework 1.css" />
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Page Header -->
+    <header class="page-header">
+      <h1>Welcome To School Activities Store</h1>
+    </header>
+
+    <!-- Navbar -->
+    <nav class="navbar">      
+      <ul>
+        <li><a href="/Html/index.html">Home</a></li>
+        <li><a href="/Html/Storefront.html">Store</a></li>
+      </ul>
+    </nav>
+
+    <!-- Search Bar -->
+    <section class="search-bar">
+      <input type="text" v-model="searchQuery" placeholder="Search classes, tutors, or keywords..." />
+      <button @click="searchClasses">Search</button>
+    </section>
+
+    <!-- Classes Section -->
+    <section class="container">
+      <h3>Available Classes</h3>
+      <div class="class-list">
+        <div class="card" v-for="classItem in filteredClasses" :key="classItem.id">
+          <img :src="classItem.image" :alt="classItem.name" class="card-image">
+          <h3>{{ classItem.name }}</h3>
+          <p>{{ classItem.description }}</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+
+    createApp({
+      data() {
+        return {
+          searchQuery: '',
+          classes: [
+            { id: 1, name: "Java Programming", description: "Master the fundamentals of Java programming by building real-world applications and understanding object-oriented principles.", image: "/Images/Java.jpg" },
+            { id: 2, name: "Artificial Intelligence", description: "Dive into the exciting world of AI and learn how machines can think, learn, and make decisions for real-world applications.", image: "/Images/AI.jpg" },
+            { id: 3, name: "Data Science & Machine Learning", description: "Learn how to use data to train models, make predictions, and uncover insights using Python and ML algorithms.", image: "/Images/Machine.jpg" },
+            { id: 4, name: "Information in Organisations", description: "Develop database management and SQL skills to handle and organize data effectively within organizations.", image: "/Images/SQL.jpg" },
+            { id: 5, name: "Web Development", description: "Build responsive websites using HTML, CSS, and JavaScript while understanding modern web frameworks.", image: "/Images/web.jpg" },
+            { id: 6, name: "Cybersecurity Fundamentals", description: "Understand core principles of security, ethical hacking, and how to defend systems from digital threats.", image: "/Images/Cyber.jpg" },
+            { id: 7, name: "Cloud Computing", description: "Explore the architecture, services, and scalability of cloud platforms like AWS, Azure, and Google Cloud.", image: "/Images/cloud.jpg" },
+            { id: 8, name: "Mobile App Development", description: "Design and build Android and iOS applications while learning mobile UI/UX and responsive design principles.", image: "/Images/Mobile.jpg" },
+            { id: 9, name: "Blockchain Technology", description: "Understand the fundamentals of blockchain, cryptocurrency, and decentralized applications (dApps).", image: "/Images/Blockchain.jpg" },
+            { id: 10, name: "UI/UX Design", description: "Learn user interface and experience design principles to create engaging, intuitive digital experiences.", image: "/Images/UI.jpg" }
+          ]
+        }
+      },
+      computed: {
+        filteredClasses() {
+          if (!this.searchQuery) return this.classes;
+          return this.classes.filter(c =>
+            c.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+            c.description.toLowerCase().includes(this.searchQuery.toLowerCase())
+          );
+        }
+      },
+      methods: {
+        searchClasses() {
+          // This can be extended for more complex search handling
+          console.log("Searching for:", this.searchQuery);
+        }
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
