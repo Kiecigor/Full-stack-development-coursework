@@ -134,7 +134,7 @@ app.post("/api/classes/:id/unbook", async (req, res) => {
 });
 
 // ---------------------------
-// START SERVER
+// START SERVER.
 // ---------------------------
 app.listen(process.env.PORT, () =>
   console.log(`🚀 Server running on http://localhost:${process.env.PORT}`)
