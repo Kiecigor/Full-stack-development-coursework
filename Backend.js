@@ -3,20 +3,39 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient, ObjectId } = require("mongodb");
 
-// ---------------------------
+// --------------------------------------
 // EXPRESS SETUP
-// ---------------------------
+// --------------------------------------
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ---------------------------
-// MONGODB NATIVE DRIVER
-// ---------------------------
+// --------------------------------------
+// MONGODB CLIENT
+// --------------------------------------
 const client = new MongoClient(process.env.MONGO_URI);
 
 let classesCollection;
 
+// Async wrapper to simplify route error-handling
+const asyncHandler = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
+
+// Validate ObjectId middleware
+const validateObjectId = (req, res, next) => {
+  const { id } = req.params;
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).json({
+      success: false,
+      error: "Invalid ID format",
+    });
+  }
+  next();
+};
+
+// --------------------------------------
+// CONNECT TO MONGO
+// --------------------------------------
 async function connectDB() {
   try {
     await client.connect();
@@ -25,117 +44,127 @@ async function connectDB() {
     const db = client.db("Schoolclasses");
     classesCollection = db.collection("Schoolclasses");
 
+    await classesCollection.createIndex({ name: "text", description: "text" });
+
     await seedData();
   } catch (err) {
     console.error("❌ MongoDB Connection Error:", err);
+    process.exit(1);
+  }
+}
+
+async function seedData() {
+  try {
+    const count = await classesCollection.countDocuments();
+    if (count === 0) {
+      await classesCollection.insertMany([
+        { name: "Java programming", price: 15, description: "Learn how to code with Java", image: "../Images/Java.jpg", location: "Online", seats: 30, createdAt: new Date() },
+        { name: "Artificial Intelligence", price: 25, description: "Learn more about AI", image: "../Images/AI.jpg", location: "London Campus", seats: 30, createdAt: new Date() },
+        { name: "Data Science and Machine Learning", price: 20, description: "Learn machine learning", image: "../Images/Machine.jpg", location: "Manchester Campus", seats: 30, createdAt: new Date() },
+        { name: "Information in Organisations", price: 10, description: "Learn SQL and databases", image: "../Images/SQL.jpg", location: "Online", seats: 30, createdAt: new Date() },
+        { name: "Web Development", price: 30, description: "Build modern websites", image: "../Images/web.jpg", location: "London Campus", seats: 30, createdAt: new Date() },
+      ]);
+      console.log("🌱 Database seeded");
+    }
+  } catch (err) {
+    console.error("❌ Seed Error:", err);
   }
 }
 
 connectDB();
 
-// ---------------------------
-// SEED DATABASE
-// ---------------------------
-async function seedData() {
-  const count = await classesCollection.countDocuments();
-  if (count === 0) {
-    await classesCollection.insertMany([
-      { name: "Java programming", price: 15, description: "Learn how to code with Java", image: "../Images/Java.jpg", location: "Online", seats: 30 },
-      { name: "Artificial Intelligence", price: 25, description: "Learn more about AI", image: "../Images/AI.jpg", location: "London Campus", seats: 30 },
-      { name: "Data Science and Machine Learning", price: 20, description: "Learn machine learning", image: "../Images/Machine.jpg", location: "Manchester Campus", seats: 30 },
-      { name: "Information in Organisations", price: 10, description: "Learn SQL and databases", image: "../Images/SQL.jpg", location: "Online", seats: 30 },
-      { name: "Web Development", price: 30, description: "Build modern websites", image: "../Images/web.jpg", location: "London Campus", seats: 30 },
-      { name: "Cybersecurity Fundamentals", price: 18, description: "Protect systems and data", image: "../Images/Cyber.jpg", location: "Online", seats: 30 },
-      { name: "Cloud Computing", price: 22, description: "Explore cloud tech", image: "../Images/cloud.jpg", location: "London Campus", seats: 30 },
-      { name: "Mobile App Development", price: 28, description: "Build Android/iOS apps", image: "../Images/Mobile.jpg", location: "London Campus", seats: 30 },
-      { name: "Blockchain Technology", price: 35, description: "Learn blockchain", image: "../Images/Blockchain.jpg", location: "Online", seats: 30 },
-      { name: "UI/UX Design", price: 12, description: "Learn UI/UX design", image: "../Images/UI.jpg", location: "London Campus", seats: 30 }
-    ]);
-    console.log("🌱 Database seeded");
-  }
-}
+// --------------------------------------
+// API ROUTES FOR LOCALHOST
+// --------------------------------------
 
-// ---------------------------
-// API ROUTES
-// ---------------------------
+// GET all classes
+app.get("/api/classes", asyncHandler(async (req, res) => {
+  const classes = await classesCollection.find({}).toArray();
+  res.status(200).json(classes);
+}));
 
-// Get all classes
-app.get("/api/classes", async (req, res) => {
-  try {
-    const classes = await classesCollection.find({}).toArray();
-    res.json(classes);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch classes" });
+// POST add a class
+app.post("/api/classes", asyncHandler(async (req, res) => {
+  const { name, price, description, location, seats } = req.body;
+
+  if (!name || typeof price !== "number" || !description || !location || typeof seats !== "number") {
+    return res.status(400).json({
+      success: false,
+      error: "Invalid or missing data",
+    });
   }
+
+  const newClass = {
+    name,
+    price,
+    description,
+    location,
+    seats,
+    image: req.body.image || "",
+    createdAt: new Date(),
+  };
+
+  const result = await classesCollection.insertOne(newClass);
+
+  res.status(201).json({
+    success: true,
+    data: { _id: result.insertedId, ...newClass },
+  });
+}));
+
+// --------------------------------------
+// BOOK SEAT
+// --------------------------------------
+app.post("/api/classes/:id/book", validateObjectId, asyncHandler(async (req, res) => {
+  const id = new ObjectId(req.params.id);
+
+  const result = await classesCollection.findOneAndUpdate(
+    { _id: id, seats: { $gt: 0 } },
+    { $inc: { seats: -1 } },
+    { returnDocument: "after" }
+  );
+
+  if (!result.value) {
+    return res.status(400).json({ success: false, error: "No seats available or class not found" });
+  }
+
+  res.json({ success: true, seats: result.value.seats });
+}));
+
+// --------------------------------------
+// UNBOOK SEAT
+// --------------------------------------
+app.post("/api/classes/:id/unbook", validateObjectId, asyncHandler(async (req, res) => {
+  const id = new ObjectId(req.params.id);
+
+  const result = await classesCollection.findOneAndUpdate(
+    { _id: id },
+    { $inc: { seats: 1 } },
+    { returnDocument: "after" }
+  );
+
+  if (!result.value) return res.status(404).json({ success: false, error: "Class not found" });
+
+  res.json({ success: true, seats: result.value.seats });
+}));
+
+// --------------------------------------
+// ERROR HANDLERS
+// --------------------------------------
+app.use((req, res) => {
+  res.status(404).json({ success: false, error: "Route not found" });
 });
 
-// Add class
-app.post("/api/classes", async (req, res) => {
-  try {
-    const result = await classesCollection.insertOne(req.body);
-    res.status(201).json({ _id: result.insertedId, ...req.body });
-  } catch (err) {
-    res.status(400).json({ error: "Error adding class" });
-  }
+app.use((err, req, res, next) => {
+  console.error("❌ Global Error:", err.stack);
+  res.status(500).json({ success: false, error: "Internal server error" });
 });
 
-// Search classes
-app.get("/api/classes/search", async (req, res) => {
-  try {
-    const name = req.query.name || "";
-    const results = await classesCollection
-      .find({ name: { $regex: name, $options: "i" } })
-      .toArray();
+// --------------------------------------
+// START SERVER ON LOCALHOST
+// --------------------------------------
+const PORT = process.env.PORT || 3000;
 
-    res.json(results);
-  } catch (err) {
-    res.status(500).json({ error: "Search failed" });
-  }
+app.listen(PORT, () => {
+  console.log(`🚀 Server running locally at: http://localhost:${3000}`);
 });
-
-// Book seat
-app.post("/api/classes/:id/book", async (req, res) => {
-  try {
-    const id = new ObjectId(req.params.id);
-
-    const cls = await classesCollection.findOne({ _id: id });
-    if (!cls) return res.json({ success: false, error: "Class not found" });
-
-    if (cls.seats <= 0)
-      return res.json({ success: false, error: "No seats left" });
-
-    await classesCollection.updateOne(
-      { _id: id },
-      { $inc: { seats: -1 } }
-    );
-
-    res.json({ success: true, seats: cls.seats - 1 });
-  } catch (err) {
-    res.status(500).json({ success: false, error: "Booking failed" });
-  }
-});
-
-// Unbook seat
-app.post("/api/classes/:id/unbook", async (req, res) => {
-  try {
-    const id = new ObjectId(req.params.id);
-
-    await classesCollection.updateOne(
-      { _id: id },
-      { $inc: { seats: 1 } }
-    );
-
-    const updated = await classesCollection.findOne({ _id: id });
-
-    res.json({ success: true, seats: updated.seats });
-  } catch (err) {
-    res.status(500).json({ success: false, error: "Unbooking failed" });
-  }
-});
-
-// ---------------------------
-// START SERVER.
-// ---------------------------
-app.listen(process.env.PORT, () =>
-  console.log(`🚀 Server running on http://localhost:${process.env.PORT}`)
-);
